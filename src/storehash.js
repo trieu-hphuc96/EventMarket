@@ -1,6 +1,6 @@
 import web3 from './web3';
 //Your contract address
-const address = '0x26f3dabe42f584426b29f79266bfd5342f53827b';
+const address = '0x68cc2cce01faae5ff94d985e799c0564023964ec';
 //Your contract ABI
 const abi = [
 	{
@@ -30,6 +30,34 @@ const abi = [
 		"type": "function"
 	},
 	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "eventHash_",
+				"type": "string"
+			}
+		],
+		"name": "setEventHash",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "eventHash",
+		"outputs": [
+			{
+				"name": "",
+				"type": "string"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
 		"constant": true,
 		"inputs": [],
 		"name": "getTickets",
@@ -55,6 +83,20 @@ const abi = [
 				],
 				"name": "tickets_",
 				"type": "tuple[]"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "messageType",
+		"outputs": [
+			{
+				"name": "",
+				"type": "string"
 			}
 		],
 		"payable": false,
@@ -106,5 +148,5 @@ const abi = [
 		"stateMutability": "view",
 		"type": "function"
 	}
-]
+];
 export default new web3.eth.Contract(abi, address);

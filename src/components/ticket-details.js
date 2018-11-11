@@ -14,7 +14,7 @@ class TicketDetails extends Component {
         return Object.keys(this.props.ticketInfo).length === 0 ? '' : (
             <div className="App container" >
                 <header>
-                    <h1>Ticket Details</h1>
+                    <h2>Ticket Details</h2>
                 </header>
                 <hr />
                 <div>
@@ -52,7 +52,7 @@ class TicketDetails extends Component {
 
 TicketDetails.propTypes = {
     ticketInfo: PropTypes.object,
-    events: PropTypes.object
+    events: PropTypes.array
 };
 
 export default TicketDetails;

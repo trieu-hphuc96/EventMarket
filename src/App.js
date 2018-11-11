@@ -4,7 +4,10 @@ import storehash from './storehash';
 import { runInThisContext } from 'vm';
 import { css } from 'react-emotion';
 import { ClipLoader } from 'react-spinners';
+import ipfs from './ipfs';
+
 import './App.css';
+
 import UserService from './service/user';
 import EventService from './service/event';
 import TicketService from './service/ticket';
@@ -35,25 +38,45 @@ class App extends Component {
       verifyCode: '',
       verify: null,
       ownerHash: '',
-      events: {},
-      selectedEvent: 0,
+      events: [],
+      selectedEvent: -1,
       ticketInfo: {},
+      addEventForm: {
+        name: '',
+        place: '',
+        price: 0,
+        quantity: 0
+      },
+      eventsCid: '',
       loading: false
     };
   }
 
-  componentDidMount() {
+  componentWillMount() {
+    //get Tickets from blockchain
     this.getTicket();
-    EventService.getEvents((value) => {
-      this.setState(state => {
-        return {
-          ...state,
-          events: value
-        }
-      })
-    });
 
+    //get EventHash and get EventsData from IPFS
+    this.getEventHash();
 
+    //get virtual data from Firebase to save on IPFS
+
+    // EventService.getEvents((value) => {
+    //   console.log(value);
+    //   this.setState(state => {
+    //     return {
+    //       ...state,
+    //       events: [...state.events, value['1'], value['2']]
+    //     }
+    //   },() => {
+    //     console.log(this.state.events)
+    //   })
+    // });
+
+  }
+
+  numberWithCommas(x) {
+    return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   }
 
   randomPhoneNum() {
@@ -96,14 +119,14 @@ class App extends Component {
       this.setState({ transactionHash });
     });
 
-    await storehash.methods.resultMessage().call((e,result) => {
+    await storehash.methods.resultMessage().call((e, result) => {
       console.log(result);
       console.log(this.state);
-      if(result === "Buy success!!") {
-        TicketService.setTicket(ticketId,this.state.createTicket.phoneNumber,this.state.selectedEvent);
+      if (result === "Buy success!!") {
+        TicketService.setTicket(ticketId, this.state.createTicket.phoneNumber, this.state.selectedEvent);
       }
     })
-    
+
     console.log("Run getTicket()");
     this.getTicket();
   }
@@ -232,7 +255,7 @@ class App extends Component {
     })
   }
 
-  onDetailsClick(ticketId, event){
+  onDetailsClick(ticketId, event) {
     event.preventDefault();
 
     TicketService.getTicketById(ticketId, (ticketInfo) => {
@@ -246,22 +269,153 @@ class App extends Component {
     })
   }
 
+  updateEventName(event) {
+    event.preventDefault();
+    const value = event.target.value;
+
+    this.setState(state => {
+      return {
+        ...state,
+        addEventForm: {
+          ...state.addEventForm,
+          name: value
+        }
+      }
+    })
+  }
+
+  updateEventPlace(event) {
+    event.preventDefault();
+    const value = event.target.value;
+
+    this.setState(state => {
+      return {
+        ...state,
+        addEventForm: {
+          ...state.addEventForm,
+          place: value
+        }
+      }
+    })
+  }
+
+  updateEventPrice(event) {
+    event.preventDefault();
+    const value = event.target.value;
+
+    this.setState(state => {
+      return {
+        ...state,
+        addEventForm: {
+          ...state.addEventForm,
+          price: value
+        }
+      }
+    })
+  }
+
+  updateEventQuantity(event) {
+    event.preventDefault();
+    const value = event.target.value;
+
+    this.setState(state => {
+      return {
+        ...state,
+        addEventForm: {
+          ...state.addEventForm,
+          quantity: value
+        }
+      }
+    })
+  }
+
+  addEvent() {
+    this.setState(state => {
+      return {
+        ...state,
+        events: [...state.events, this.state.addEventForm]
+      }
+    }, () => {
+      console.log(this.state.events);
+      //save events in ipfs
+      ipfs.dag.put(this.state.events, (err, cid) => {
+        if (err) {
+          console.error('error: ' + err)
+        }
+
+        this.setState(state => {
+          return {
+            ...state,
+            eventsCid: cid.toBaseEncodedString()
+          }
+        }, () => {
+          console.log(this.state.eventsCid);
+          this.setEventHash();
+        })
+      })
+    })
+  }
+
+  setEventHash = async () => {
+    const accounts = await web3.eth.getAccounts();
+    console.log(accounts[0]);
+    await storehash.methods.setEventHash(this.state.eventsCid).send({
+      from: accounts[0]
+    }, (error, transactionHash) => {
+      console.log(transactionHash);
+      this.setState({ transactionHash });
+    });
+  };
+
+  getEventHash = async () => {
+    await storehash.methods.eventHash().call((e, result) => {
+      console.log(result);
+      this.setState(state => {
+        return {
+          ...state,
+          eventsCid: result
+        }
+      }, () => {
+        this.getEventsData();
+      })
+    })
+  };
+
+  getEventsData() {
+    //get events from eventsCid
+    console.log(this.state.eventsCid)
+    ipfs.dag.get(this.state.eventsCid, (err, result) => {
+      if (err) {
+        console.error('error: ' + err)
+        throw err
+      }
+      console.log(result.value)
+      this.setState(state => {
+        return {
+          ...state,
+          events: result.value
+        }
+      })
+    })
+  }
+
 
   render() {
     let userTickets = this.state.tickets.filter((ticket) => {
       return ticket.owner === this.state.ownerHash
     })
 
-    userTickets = userTickets.length === 0 && (this.state.verify === false || this.state.verify === null) ?  this.state.tickets : userTickets;
+    userTickets = userTickets.length === 0 && (this.state.verify === false || this.state.verify === null) ? this.state.tickets : userTickets;
 
     return (
       <div className="App container" >
         <header>
-          <h1>Event Tickets</h1>
+          <h1><strong>Event Tickets</strong></h1>
         </header>
         <hr />
         <div>
           <form>
+            {/* Login */}
             <div className="row">
               <div className="col">
                 <input type="text" className="form-control" placeholder="Phone Number..." value={this.state.createTicket.phoneNumber} onChange={this.updatePhoneNumber.bind(this)} />
@@ -276,19 +430,54 @@ class App extends Component {
                 <input type="text" className="form-control" placeholder="Verify Code..." onChange={this.updateVerifyCode.bind(this)} />
               </div>
               <div className="col">
-                <button type="button" className="btn btn-dark" onClick={this.verifyPhoneNumber.bind(this)}>Verify</button> <span>{this.state.verify ? "   Phone number verified!!" : this.state.verify === null ? "" : "   Verify code is wrong!!!"}</span>
+                <button type="button" className="btn btn-dark" onClick={this.verifyPhoneNumber.bind(this)}>Verify</button>&nbsp; <span>{this.state.verify ? "Phone number verified!!" : this.state.verify === null ? "" : "Verify code is wrong!!!"}</span>
               </div>
             </div>
             <hr />
+            {/* Add Event */}
+            <header className="offset-sm-1">
+              <h3>Add Event</h3>
+            </header>
+            <div className="form-group row">
+              <label htmlFor="eventName" className="col-sm-1 col-form-label">Name:</label>
+              <div className="col-sm-5">
+                <input type="text" className="form-control" id="eventName" value={this.state.addEventForm.name} onChange={this.updateEventName.bind(this)} />
+              </div>
+            </div>
+            <div className="form-group row">
+              <label htmlFor="eventPlace" className="col-sm-1 col-form-label">Place:</label>
+              <div className="col-sm-5">
+                <input type="text" className="form-control" id="eventPlace" value={this.state.addEventForm.place} onChange={this.updateEventPlace.bind(this)} />
+              </div>
+            </div>
+            <div className="form-group row">
+              <label htmlFor="eventPrice" className="col-sm-1 col-form-label">Price:</label>
+              <div className="col-sm-5">
+                <input type="number" className="form-control" id="eventPrice" value={this.state.addEventForm.price} onChange={this.updateEventPrice.bind(this)} />
+              </div>
+            </div>
+            <div className="form-group row">
+              <label htmlFor="eventQuantity" className="col-sm-1 col-form-label">Quantity:</label>
+              <div className="col-sm-5">
+                <input type="number" className="form-control" id="eventQuantity" value={this.state.addEventForm.quantity} onChange={this.updateEventQuantity.bind(this)} />
+              </div>
+            </div>
+            <div className="form-group row">
+              <div className="offset-sm-1 col-sm-5">
+                <button type="button" className="btn btn-dark" onClick={this.addEvent.bind(this)}>Add Event</button>
+              </div>
+            </div>
+            <hr />
+            {/* Buy Ticket */}
             <div className="row">
               <div className="col">
                 <div className="input-group mb-3">
                   <select className="custom-select" onChange={this.selectEvent.bind(this)} value={this.state.selectedEvent}>
-                    <option key={'default'} value={0}>Choose Event...</option>
+                    <option key={'default'} value={-1}>Choose Event...</option>
                     {
-                      Object.keys(this.state.events).map((item, i) => {
-                        return item === 'counter' ? '' : (
-                          <option key={i} value={item}>{this.state.events[item].name}</option>
+                      this.state.events.map((item, i) => {
+                        return (
+                          <option key={i} value={i}>{item.name}</option>
                         );
                       })
                     }
@@ -319,7 +508,7 @@ class App extends Component {
                         <td>{i + 1}</td>
                         <td>{item['ticketId']}</td>
                         <td>{item['eventName']}</td>
-                        <td>{item['price']}</td>
+                        <td>{this.numberWithCommas(item['price']) + ' wei'}</td>
                         <td><button type="button" className="btn btn-dark" onClick={this.onDetailsClick.bind(this, item['ticketId'])}>Details</button></td>
                       </tr>
                     );
