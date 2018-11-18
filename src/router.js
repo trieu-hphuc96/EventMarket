@@ -5,8 +5,8 @@ import {
     Switch
 } from 'react-router-dom';
 
-import Admin from './admin/components/admin';
-import User from './user/components/user';
+import App from './App';
+import VerifyTicket from './components/verifyTicket';
 
 
 class AppRouter extends React.Component {
@@ -14,8 +14,8 @@ class AppRouter extends React.Component {
         return (
             <Router>
                 <Switch>
-                    <Route path="/admin" component={Admin} />
-                    <Route path="/" component={User} />
+                    <Route exact path="/" component={App} />
+                    <Route path="/:ticketId" component={VerifyTicket} />
                 </Switch>
             </Router>
         );

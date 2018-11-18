@@ -1,10 +1,9 @@
 import React, { Component } from 'react';
 import web3 from './web3';
 import storehash from './storehash';
-import { runInThisContext } from 'vm';
+import ipfs from './ipfs';
 import { css } from 'react-emotion';
 import { ClipLoader } from 'react-spinners';
-import ipfs from './ipfs';
 
 import './App.css';
 
@@ -12,6 +11,9 @@ import UserService from './service/user';
 import EventService from './service/event';
 import TicketService from './service/ticket';
 import TicketDetails from './components/ticket-details';
+import QrCode from './components/qrCode';
+
+var QRCode = require('qrcode.react');
 
 var sha256 = require('js-sha256');
 const Nexmo = require('nexmo');
@@ -48,6 +50,7 @@ class App extends Component {
         quantity: 0
       },
       eventsCid: '',
+      getQrCodeByTicketId: '',
       loading: false
     };
   }
@@ -142,7 +145,7 @@ class App extends Component {
     })
     //web3.eth.enable();
     const accounts = await web3.eth.getAccounts();
-    console.log(accounts[0]);
+    console.log("Current blockchain account: ", accounts[0]);
     await storehash.methods.getTickets.call().call((error, result) => {
       this.setState(state => {
         return {
@@ -150,7 +153,7 @@ class App extends Component {
           tickets: result
         }
       })
-      console.log(this.state.tickets);
+      console.log("Tickets: ", this.state.tickets);
     });
 
     this.setState(state => {
@@ -259,6 +262,11 @@ class App extends Component {
     event.preventDefault();
 
     TicketService.getTicketById(ticketId, (ticketInfo) => {
+      if (ticketInfo === null) {
+        console.log(`Không tìm thấy ${ticketId}!!`);
+        return;
+      }
+
       console.log(ticketInfo);
       this.setState(state => {
         return {
@@ -369,7 +377,7 @@ class App extends Component {
 
   getEventHash = async () => {
     await storehash.methods.eventHash().call((e, result) => {
-      console.log(result);
+      console.log("Event Hash: ", result);
       this.setState(state => {
         return {
           ...state,
@@ -383,19 +391,30 @@ class App extends Component {
 
   getEventsData() {
     //get events from eventsCid
-    console.log(this.state.eventsCid)
     ipfs.dag.get(this.state.eventsCid, (err, result) => {
       if (err) {
         console.error('error: ' + err)
         throw err
       }
-      console.log(result.value)
+      console.log("Events: ", result.value)
       this.setState(state => {
         return {
           ...state,
           events: result.value
         }
       })
+    })
+  }
+
+  onGetQrCodeClick(ticketId, event) {
+    event.preventDefault();
+
+    console.log("onGetQrCodeClick", ticketId);
+    this.setState(state => {
+      return {
+        ...state,
+        getQrCodeByTicketId: ticketId
+      }
     })
   }
 
@@ -497,7 +516,7 @@ class App extends Component {
                   <th scope="col">Ticket ID</th>
                   <th scope="col" style={{ width: '20%' }}>Event Name</th>
                   <th scope="col" style={{ width: '15%' }}>Price</th>
-                  <th scope="col" style={{ width: '15%' }}></th>
+                  <th scope="col" style={{ width: '25%' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -509,7 +528,10 @@ class App extends Component {
                         <td>{item['ticketId']}</td>
                         <td>{item['eventName']}</td>
                         <td>{this.numberWithCommas(item['price']) + ' wei'}</td>
-                        <td><button type="button" className="btn btn-dark" onClick={this.onDetailsClick.bind(this, item['ticketId'])}>Details</button></td>
+                        <td>
+                          <button type="button" className="btn btn-dark" style={{ marginRight: '10px' }} onClick={this.onGetQrCodeClick.bind(this, item['ticketId'])}>Get QR Code</button>
+                          <button type="button" className="btn btn-dark" onClick={this.onDetailsClick.bind(this, item['ticketId'])}>Details</button>
+                        </td>
                       </tr>
                     );
                   })
@@ -526,6 +548,20 @@ class App extends Component {
               loading={this.state.loading}
             />
           </div>
+
+          {this.state.getQrCodeByTicketId === '' ? '' : (
+            <div>
+              <hr></hr>
+              <p>
+                <span className="h2" style={{ marginRight: '40px' }}>Ticket Id: </span>
+                {this.state.getQrCodeByTicketId}
+              </p>
+              <header style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '40px' }}>
+                <h2>QR Code:</h2>
+              </header>
+              <QRCode style={{ display: 'inline-block', verticalAlign: 'middle' }} value={"http://localhost:3000/" + this.state.getQrCodeByTicketId} />
+            </div>
+          )}
 
           <hr></hr>
           <TicketDetails ticketInfo={this.state.ticketInfo} events={this.state.events}></TicketDetails>
