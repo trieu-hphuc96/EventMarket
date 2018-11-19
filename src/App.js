@@ -11,7 +11,6 @@ import UserService from './service/user';
 import EventService from './service/event';
 import TicketService from './service/ticket';
 import TicketDetails from './components/ticket-details';
-import QrCode from './components/qrCode';
 
 var QRCode = require('qrcode.react');
 
