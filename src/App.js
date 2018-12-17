@@ -7,6 +7,10 @@ import { ClipLoader } from 'react-spinners';
 
 import './App.css';
 
+import 'react-notifications/dist/react-notifications.css';
+
+import { NotificationContainer, NotificationManager } from 'react-notifications';
+
 import UserService from './service/user';
 import EventService from './service/event';
 import TicketService from './service/ticket';
@@ -40,6 +44,7 @@ class App extends Component {
       verify: null,
       ownerHash: '',
       events: [],
+      oldEvents: [],
       selectedEvent: -1,
       ticketInfo: {},
       addEventForm: {
@@ -49,6 +54,7 @@ class App extends Component {
         quantity: 0
       },
       eventsCid: '',
+      setEventHashMessage: '',
       getQrCodeByTicketId: '',
       loading: false
     };
@@ -90,7 +96,7 @@ class App extends Component {
   }
 
   randomQuantity() {
-    return Math.floor(Math.random() * 100);
+    return Math.floor(Math.random() * 10000);
   }
 
   buyTicket = async (e) => {
@@ -125,7 +131,10 @@ class App extends Component {
       console.log(result);
       console.log(this.state);
       if (result === "Buy success!!") {
+        NotificationManager.success('Buy Ticket Success!', "Success");
         TicketService.setTicket(ticketId, this.state.createTicket.phoneNumber, this.state.selectedEvent);
+      } else {
+        NotificationManager.error('Buy Ticket Fail!', "Error");
       }
     })
 
@@ -202,16 +211,23 @@ class App extends Component {
 
     const messageContent = 'Your verify code: ' + verifyCode;
     console.log(messageContent);
-    // nexmo.message.sendSms(
-    //   'NEXMO', phoneNumber, messageContent,
-    //   (err, responseData) => {
-    //     if (err) {
-    //       console.log(err);
-    //     } else {
-    //       console.log(responseData);
-    //     }
-    //   }
-    // );
+
+    nexmo.message.sendSms(
+      'Event Market', phoneNumber, messageContent,
+      (err, responseData) => {
+        if (err) {
+          console.log(err);
+          NotificationManager.error('Send SMS Message Fail!', "Error");
+        } else {
+          console.log(responseData);
+          if(responseData.messages[0]['error-text']) {
+            NotificationManager.error('Send SMS Message Fail!', "Error");
+          } else {
+            NotificationManager.success('Send SMS Message Success!', "Success");
+          }
+        }
+      }
+    );
   }
 
   updateVerifyCode(event) {
@@ -237,12 +253,13 @@ class App extends Component {
         verify: this.state.verifyCode === this.state.createTicket.verifyCode && this.state.verifyCode !== '' ? true : false,
         ownerHash: sha256(this.state.createTicket.phoneNumber)
       }
-    })
-
-    setTimeout(() => {
+    }, () => {
       console.log(this.state);
       if (this.state.verify) {
+        NotificationManager.success('Verify Success!', "Success");
         UserService.setUser(this.state.ownerHash, this.state.createTicket.phoneNumber);
+      } else {
+        NotificationManager.error('Verify code is wrong!', "Error");
       }
     })
   }
@@ -263,6 +280,7 @@ class App extends Component {
     TicketService.getTicketById(ticketId, (ticketInfo) => {
       if (ticketInfo === null) {
         console.log(`Không tìm thấy ${ticketId}!!`);
+        NotificationManager.error(`Not find ${ticketId}!!`, "Error");
         return;
       }
 
@@ -270,7 +288,10 @@ class App extends Component {
       this.setState(state => {
         return {
           ...state,
-          ticketInfo: ticketInfo
+          ticketInfo: {
+            ticketId: ticketId,
+            ...ticketInfo
+          }
         }
       })
     })
@@ -337,12 +358,35 @@ class App extends Component {
   }
 
   addEvent() {
+    if (!this.state.addEventForm.name ||
+      !this.state.addEventForm.place ||
+      !this.state.addEventForm.price ||
+      !this.state.addEventForm.quantity) {
+      NotificationManager.error(`Please fill all the fields!!`, "Error");
+      return;
+    }
+
     this.setState(state => {
       return {
         ...state,
-        events: [...state.events, this.state.addEventForm]
+        events: [...state.events, this.state.addEventForm],
+        setEventHashMessage: 'Add new event success!'
       }
     }, () => {
+      NotificationManager.success('Add new event success!', "Success");
+
+      this.setState(state => {
+        return {
+          ...state,
+          addEventForm: {
+            name: '',
+            place: '',
+            price: 0,
+            quantity: 0
+          }
+        }
+      })
+
       console.log(this.state.events);
       //save events in ipfs
       ipfs.dag.put(this.state.events, (err, cid) => {
@@ -357,10 +401,22 @@ class App extends Component {
           }
         }, () => {
           console.log(this.state.eventsCid);
-          this.setEventHash();
+          // this.setEventHash();
+          // setInterval(() => {
+          //   console.log('run interval');
+          //   this.setEventHash();
+          // }, 6000);
         })
       })
     })
+  }
+
+  saveEventOnBlockchain() {
+    if (this.state.events.length !== this.state.oldEvents.length) {
+      this.setEventHash();
+    } else {
+      NotificationManager.warning('Don\'t have any new event to save!', "Warning");
+    }
   }
 
   setEventHash = async () => {
@@ -372,6 +428,30 @@ class App extends Component {
       console.log(transactionHash);
       this.setState({ transactionHash });
     });
+
+    await storehash.methods.resultMessage().call((e, result) => {
+      console.log(result);
+      console.log(this.state);
+
+      this.setState(state => {
+        return {
+          ...state,
+          setEventHashMessage: result
+        }
+      }, () => {
+        if (result === "Set event hash success!!") {
+          NotificationManager.success('Save events success!', "Success");
+          this.setState(state => {
+            return {
+              ...state,
+              oldEvents: state.events
+            }
+          })
+        } else {
+          NotificationManager.error('Not allowed to save events on Blockchain!', "Error");
+        }
+      })
+    })
   };
 
   getEventHash = async () => {
@@ -399,7 +479,8 @@ class App extends Component {
       this.setState(state => {
         return {
           ...state,
-          events: result.value
+          events: result.value,
+          oldEvents: result.value
         }
       })
     })
@@ -427,6 +508,7 @@ class App extends Component {
 
     return (
       <div className="App container" >
+        <NotificationContainer></NotificationContainer>
         <header>
           <h1><strong>Event Tickets</strong></h1>
         </header>
@@ -448,7 +530,9 @@ class App extends Component {
                 <input type="text" className="form-control" placeholder="Verify Code..." onChange={this.updateVerifyCode.bind(this)} />
               </div>
               <div className="col">
-                <button type="button" className="btn btn-dark" onClick={this.verifyPhoneNumber.bind(this)}>Verify</button>&nbsp; <span>{this.state.verify ? "Phone number verified!!" : this.state.verify === null ? "" : "Verify code is wrong!!!"}</span>
+                <button type="button" className="btn btn-dark" onClick={this.verifyPhoneNumber.bind(this)}>
+                  Verify
+                </button>
               </div>
             </div>
             <hr />
@@ -482,7 +566,9 @@ class App extends Component {
             </div>
             <div className="form-group row">
               <div className="offset-sm-1 col-sm-5">
-                <button type="button" className="btn btn-dark" onClick={this.addEvent.bind(this)}>Add Event</button>
+                <button type="button" className="btn btn-dark" onClick={this.addEvent.bind(this)} style={{ marginRight: '5px' }}>Add Event</button>
+                <button type="button" className="btn btn-dark" onClick={this.saveEventOnBlockchain.bind(this)}>Save Events On Blockchain</button>
+                {/* <div>{this.state.setEventHashMessage}</div> */}
               </div>
             </div>
             <hr />
@@ -493,7 +579,7 @@ class App extends Component {
                   <select className="custom-select" onChange={this.selectEvent.bind(this)} value={this.state.selectedEvent}>
                     <option key={'default'} value={-1}>Choose Event...</option>
                     {
-                      this.state.events.map((item, i) => {
+                      this.state.oldEvents.map((item, i) => {
                         return (
                           <option key={i} value={i}>{item.name}</option>
                         );
@@ -506,8 +592,25 @@ class App extends Component {
               </div>
             </div>
           </form>
-          <hr />
-          <div className="table-responsive sweet-loading" style={{ position: 'relative' }}>
+
+          <TicketDetails ticketInfo={this.state.ticketInfo} events={this.state.events}></TicketDetails>
+
+          {this.state.getQrCodeByTicketId === '' ? '' : (
+            <div>
+              <hr></hr>
+              <p>
+                <span className="h2" style={{ marginRight: '40px' }}>Ticket Id: </span>
+                {this.state.getQrCodeByTicketId}
+              </p>
+              <header style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '40px' }}>
+                <h2>QR Code:</h2>
+              </header>
+              <QRCode style={{ display: 'inline-block', verticalAlign: 'middle' }} value={"http://localhost:3000/" + this.state.getQrCodeByTicketId} />
+              <hr></hr>
+            </div>
+          )}
+
+          <div className="table-responsive sweet-loading" style={{ position: 'relative', minHeight: '400px' }}>
             <table className="table table-md " style={{ tableLayout: 'fixed' }}>
               <thead>
                 <tr>
@@ -547,23 +650,6 @@ class App extends Component {
               loading={this.state.loading}
             />
           </div>
-
-          {this.state.getQrCodeByTicketId === '' ? '' : (
-            <div>
-              <hr></hr>
-              <p>
-                <span className="h2" style={{ marginRight: '40px' }}>Ticket Id: </span>
-                {this.state.getQrCodeByTicketId}
-              </p>
-              <header style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '40px' }}>
-                <h2>QR Code:</h2>
-              </header>
-              <QRCode style={{ display: 'inline-block', verticalAlign: 'middle' }} value={"http://localhost:3000/" + this.state.getQrCodeByTicketId} />
-            </div>
-          )}
-
-          <hr></hr>
-          <TicketDetails ticketInfo={this.state.ticketInfo} events={this.state.events}></TicketDetails>
         </div>
 
       </div>

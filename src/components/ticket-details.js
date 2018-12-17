@@ -13,12 +13,19 @@ class TicketDetails extends Component {
     render() {
         return Object.keys(this.props.ticketInfo).length === 0 ? '' : (
             <div className="App container" >
+                <hr />
                 <header>
                     <h2>Ticket Details</h2>
                 </header>
                 <hr />
                 <div>
                     <form>
+                        <div className="row">
+                            <div className="col">
+                                {'Ticket ID: ' + this.props.ticketInfo.ticketId}
+                            </div>
+                        </div>
+                        <hr />
                         <div className="row">
                             <div className="col">
                                 {'Owner\'s Phone Number: ' + this.props.ticketInfo.phoneNumber}
@@ -44,7 +51,7 @@ class TicketDetails extends Component {
                         </div>
                     </form>
                 </div>
-
+                <hr />
             </div>
         );
     }

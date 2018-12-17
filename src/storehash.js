@@ -1,6 +1,6 @@
 import web3 from './web3';
 //Your contract address
-const address = '0x68cc2cce01faae5ff94d985e799c0564023964ec';
+const address = '0x278860D06Db5b986675D11Da5Aa5e553E7B2d2c9';
 //Your contract ABI
 const abi = [
 	{
@@ -148,5 +148,5 @@ const abi = [
 		"stateMutability": "view",
 		"type": "function"
 	}
-];
+]
 export default new web3.eth.Contract(abi, address);
